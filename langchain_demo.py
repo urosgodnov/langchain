@@ -5,6 +5,7 @@ from typing import List
 
 # LangChain imports
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_experimental.text_splitter import SemanticChunker
 from langchain_community.document_loaders import TextLoader
 from langchain.text_splitter import (
     RecursiveCharacterTextSplitter,
@@ -119,34 +120,10 @@ def chunk_by_fixed_size(docs: List[Document], chunk_size=100, chunk_overlap=20):
     return text_splitter.split_documents(docs)
 
 def chunk_by_semantic_units(docs: List[Document]):
-    """Attempt to split by semantic units - first by headers, then refine large chunks."""
-    # First split by headers
-    header_chunks = chunk_by_headings(docs)
-    
-    # Then refine large chunks further by paragraphs
-    refined_chunks = []
-    for chunk in header_chunks:
-        # If chunk is small enough, keep it as is
-        if len(chunk.page_content) < 500:
-            refined_chunks.append(chunk)
-        else:
-            # Split larger chunks at paragraph level
-            text_splitter = RecursiveCharacterTextSplitter(
-                separators=["\n\n", "\n", ". ", " ", ""],
-                chunk_size=300,
-                chunk_overlap=50,
-                length_function=len
-            )
-            smaller_chunks = text_splitter.split_text(chunk.page_content)
-            
-            # Convert to Documents and preserve metadata
-            for small_chunk in smaller_chunks:
-                refined_chunks.append(Document(
-                    page_content=small_chunk,
-                    metadata=chunk.metadata
-                ))
-    
-    return refined_chunks
+    text_splitter = SemanticChunker(OpenAIEmbeddings(),
+                                    breakpoint_threshold_type="standard_deviation")
+   
+    return text_splitter.create_documents([docs[0].page_content])
 
 # Setup retrieval and QA
 def setup_retrieval_qa(chunks, model_name="gpt-4o-mini"):
